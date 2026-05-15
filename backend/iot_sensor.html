@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>IoT Sensor — Predictive Maintenance</title>
+<style>
+:root{--bg:#000000;--card:#000000;--card2:rgba(255,255,255,0.03);--border:rgba(255,255,255,0.15);--text1:#ffffff;--text2:#a1a1aa;--text3:#71717a;--accent:#ffffff;--ok:#22C55E;--warn:#F59E0B;--danger:#EF4444}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text1);padding:16px;padding-bottom:40px;min-height:100vh}
+.header{text-align:center;padding:16px 0 12px}
+.header h1{font-size:18px;font-weight:800;color:#ffffff}
+.header p{font-size:11px;color:var(--text3);margin-top:4px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
+.card-title{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--text1);margin-bottom:10px}
+.status-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;margin-bottom:12px;font-size:12px;font-weight:600}
+.status-bar.connected{background:rgba(34,197,94,.1);color:var(--ok)}
+.status-bar.disconnected{background:rgba(239,68,68,.1);color:var(--danger)}
+.status-bar.connecting{background:rgba(245,158,11,.1);color:var(--warn)}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot.green{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.dot.red{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+.dot.yellow{background:var(--warn);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sensor-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.sensor-val{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+.sensor-val .label{font-size:10px;color:var(--text2);font-weight:600}
+.sensor-val .val{font-size:18px;font-weight:800;font-family:monospace;color:var(--text1);margin-top:4px}
+.bar-container{margin-bottom:8px}
+.bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px}
+.bar-track{height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .3s,background .3s}
+.prediction-section{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pred-item{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px}
+.pred-item .label{font-size:10px;color:var(--text2);font-weight:600}
+.pred-item .val{font-size:16px;font-weight:800;font-family:monospace;margin-top:4px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:50px;font-size:12px;font-weight:700}
+.badge-normal{background:rgba(34,197,94,.12);color:var(--ok)}
+.badge-idle{background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text1)}
+.badge-stress{background:rgba(239,68,68,.12);color:var(--danger)}
+.recommendation{background:var(--card2);border-radius:10px;padding:12px;font-size:12px;color:var(--text2);line-height:1.5;margin-top:8px}
+.gauge-container{display:flex;justify-content:center;padding:8px 0}
+.ios-btn,.sim-btn{display:block;width:100%;padding:14px;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px}
+.ios-btn{background:rgba(255,255,255,0.08);color:#ffffff;border:1px solid var(--border)}
+.sim-btn-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+.sim-btn{padding:12px 8px;border-radius:10px;font-size:13px;font-weight:700;border:1px solid var(--border);background:var(--card2);color:var(--text1);cursor:pointer;transition:all .15s}
+.sim-btn.active{border-color:#ffffff;background:rgba(255,255,255,.1)}
+.sim-btn:active{transform:scale(.96)}
+.diag{font-size:11px;color:var(--text2);line-height:1.7;padding:8px 0}
+.diag b{color:var(--text1)}
+.diag .ok{color:var(--ok)}.diag .fail{color:var(--danger)}.diag .pending{color:var(--warn)}
+.hidden{display:none!important}
+.shake-indicator{text-align:center;padding:8px;border-radius:10px;font-size:14px;font-weight:800;margin-bottom:12px;transition:all .3s}
+.shake-none{background:rgba(34,197,94,.1);color:var(--ok)}
+.shake-medium{background:rgba(245,158,11,.1);color:var(--warn)}
+.shake-hard{background:rgba(239,68,68,.1);color:var(--danger)}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📱 IoT Sensor Node</h1>
+  <p>Predictive Maintenance — Real-time Vibration Analysis</p>
+</div>
+
+<button id="iosBtn" class="ios-btn hidden" onclick="requestiOSPermission()">🔓 Tap to Enable Motion Sensor (iOS)</button>
+
+<div id="statusBar" class="status-bar disconnected">
+  <div class="dot red" id="statusDot"></div>
+  <span id="statusText">Disconnected</span>
+</div>
+
+<!-- Shake Intensity Indicator -->
+<div id="shakeIndicator" class="shake-indicator shake-none">📊 Shake: STILL</div>
+
+<!-- Sensor Diagnostics -->
+<div class="card" id="diagCard">
+  <div class="card-title">🔧 Sensor Diagnostics</div>
+  <div class="diag" id="diagInfo">Checking sensor access...</div>
+</div>
+
+<!-- Manual Simulation (hidden by default, toggle to enable) -->
+<div class="card" id="simCard" style="display:none">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div class="card-title" style="margin-bottom:0">🎮 Manual Simulation</div>
+    <button onclick="toggleSim(false)" style="background:var(--danger);color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer">Disable</button>
+  </div>
+  <div class="sim-btn-row">
+    <button class="sim-btn active" id="simStill" onclick="setSimMode('still')">📱 Still<br><span style="font-size:10px;color:var(--text3)">Normal</span></button>
+    <button class="sim-btn" id="simMedium" onclick="setSimMode('medium')">🤝 Medium<br><span style="font-size:10px;color:var(--text3)">Idle</span></button>
+    <button class="sim-btn" id="simHard" onclick="setSimMode('hard')">💥 Hard<br><span style="font-size:10px;color:var(--text3)">Stress</span></button>
+  </div>
+</div>
+<button id="simToggleBtn" onclick="toggleSim(true)" style="display:none;width:100%;padding:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;margin-bottom:12px">🎮 Enable Manual Simulation (if sensor not working)</button>
+
+<!-- Accelerometer Data -->
+<div class="card">
+  <div class="card-title">Accelerometer Data</div>
+  <div class="sensor-grid">
+    <div class="sensor-val"><div class="label">X-Axis</div><div class="val" id="ax">0.00</div></div>
+    <div class="sensor-val"><div class="label">Y-Axis</div><div class="val" id="ay">0.00</div></div>
+    <div class="sensor-val"><div class="label">Z-Axis</div><div class="val" id="az">0.00</div></div>
+  </div>
+  <div class="bar-container">
+    <div class="bar-label"><span>Magnitude</span><span id="magVal" style="font-family:monospace;font-weight:700">0.00 m/s²</span></div>
+    <div class="bar-track"><div class="bar-fill" id="magBar" style="width:0%;background:var(--ok)"></div></div>
+  </div>
+  <div class="bar-container">
+    <div class="bar-label"><span>Vibration</span><span id="vibVal" style="font-family:monospace;font-weight:700">0.00</span></div>
+    <div class="bar-track"><div class="bar-fill" id="vibBar" style="width:0%;background:var(--ok)"></div></div>
+  </div>
+</div>
+
+<!-- ML Prediction -->
+<div class="card">
+  <div class="card-title">ML Model Prediction</div>
+  <div style="text-align:center;margin-bottom:12px"><span id="clusterBadge" class="badge badge-normal">— WAITING —</span></div>
+  <div class="gauge-container"><svg id="healthGauge" width="140" height="115" viewBox="0 0 140 115"></svg></div>
+  <div class="prediction-section">
+    <div class="pred-item"><div class="label">Anomaly Score</div><div class="val" id="anomScore" style="color:var(--text1)">—</div></div>
+    <div class="pred-item"><div class="label">RUL (hours)</div><div class="val" id="rulHours" style="color:var(--text1)">—</div></div>
+    <div class="pred-item"><div class="label">Alert Level</div><div class="val" id="alertLevel" style="color:var(--text2)">—</div></div>
+    <div class="pred-item"><div class="label">Readings Sent</div><div class="val" id="readingsCount" style="color:var(--accent)">0</div></div>
+  </div>
+  <div class="recommendation" id="recommendation">Waiting for sensor data...</div>
+</div>
+
+<script>
+let ws=null, connected=false, readingsSent=0;
+let lastAx=0,lastAy=0,lastAz=0,lastMag=9.81,lastVib=0;
+let sendInterval=null, reconnectTimer=null;
+let sensorWorking=false, simMode='still', useSimulation=false;
+let motionEventCount=0;
+
+// Extract token from URL
+const urlParams = new URLSearchParams(window.location.search);
+const TOKEN = urlParams.get('token') || '';
+let tokenRevoked = false;
+
+// ── Sensor Detection ──
+function checkSensors(){
+  const diag=document.getElementById('diagInfo');
+  let html='';
+  const hasDM=typeof DeviceMotionEvent!=='undefined';
+  const needsPerm=hasDM&&typeof DeviceMotionEvent.requestPermission==='function';
+  const isSecure=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+  
+  html+='<b>DeviceMotion API:</b> '+(hasDM?'<span class="ok">Available</span>':'<span class="fail">Not Available</span>')+'<br>';
+  html+='<b>Secure Context:</b> '+(isSecure?'<span class="ok">Yes (HTTPS)</span>':'<span class="pending">No (HTTP) — sensor may be blocked</span>')+'<br>';
+  html+='<b>iOS Permission:</b> '+(needsPerm?'<span class="pending">Required — tap button above</span>':'<span class="ok">Not needed</span>')+'<br>';
+  html+='<b>Sensor Data:</b> <span class="pending" id="sensorStatus">Testing...</span><br>';
+  html+='<b>Motion Events:</b> <span id="motionCount">0</span>';
+  diag.innerHTML=html;
+
+  if(needsPerm){
+    document.getElementById('iosBtn').classList.remove('hidden');
+  } else {
+    startMotionListener();
+  }
+
+  // After 2 seconds check if sensor is working
+  setTimeout(()=>{
+    const ss=document.getElementById('sensorStatus');
+    if(!sensorWorking){
+      if(ss) ss.innerHTML='<span class="fail">No data received — try HTTPS or enable manual simulation below</span>';
+      document.getElementById('simToggleBtn').style.display='block';
+    } else {
+      if(ss) ss.innerHTML='<span class="ok">Working — receiving live data</span>';
+      document.getElementById('simToggleBtn').style.display='block'; // still show option
+    }
+  },2500);
+}
+
+function toggleSim(enable){
+  useSimulation=enable;
+  document.getElementById('simCard').style.display=enable?'block':'none';
+  if(!enable) simMode='still';
+}
+
+function requestiOSPermission(){
+  DeviceMotionEvent.requestPermission().then(s=>{
+    if(s==='granted'){document.getElementById('iosBtn').classList.add('hidden');startMotionListener()}
+    else alert('Motion permission denied.');
+  }).catch(e=>alert('Error: '+e));
+}
+
+// ── Motion Listener ──
+function startMotionListener(){
+  window.addEventListener('devicemotion',(e)=>{
+    motionEventCount++;
+    const mc=document.getElementById('motionCount');
+    if(mc)mc.textContent=motionEventCount;
+
+    // Try multiple sources
+    let ax=null,ay=null,az=null;
+    if(e.accelerationIncludingGravity){
+      ax=e.accelerationIncludingGravity.x;
+      ay=e.accelerationIncludingGravity.y;
+      az=e.accelerationIncludingGravity.z;
+    }
+    if((ax===null||ax===undefined)&&e.acceleration){
+      ax=e.acceleration.x;ay=e.acceleration.y;az=e.acceleration.z;
+    }
+    if(ax===null||ax===undefined||ay===null||az===null){
+      return; // No real data
+    }
+    ax=Number(ax)||0; ay=Number(ay)||0; az=Number(az)||0;
+    
+    if(!sensorWorking){
+      sensorWorking=true;
+      useSimulation=false;
+      const ss=document.getElementById('sensorStatus');
+      if(ss)ss.innerHTML='<span class="ok">Working — receiving live data</span>';
+    }
+    
+    lastAx=ax; lastAy=ay; lastAz=az;
+    lastMag=Math.sqrt(ax*ax+ay*ay+az*az);
+    lastVib=Math.abs(lastMag-9.81);
+  },true);
+  connectWS();
+}
+
+// ── Manual Simulation ──
+function setSimMode(mode){
+  simMode=mode;
+  document.querySelectorAll('.sim-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sim'+mode.charAt(0).toUpperCase()+mode.slice(1)).classList.add('active');
+}
+
+function getSimValues(){
+  const r=()=>(Math.random()-0.5)*2;
+  if(simMode==='still') return {ax:0.1+r()*0.05, ay:0.2+r()*0.05, az:9.7+r()*0.1, magnitude:9.81+r()*0.1, vibration:0.05+Math.random()*0.1};
+  if(simMode==='medium') return {ax:2+r()*1.5, ay:1.5+r()*1, az:9.5+r()*2, magnitude:12+r()*2, vibration:2+Math.random()*1.5};
+  return {ax:5+r()*3, ay:4+r()*3, az:8+r()*4, magnitude:18+r()*3, vibration:6+Math.random()*3};
+}
+
+// ── WebSocket ──
+function connectWS(){
+  if(tokenRevoked) return;
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  const url=proto+'//'+location.host+'/ws/iot-sensor?token='+encodeURIComponent(TOKEN);
+  updateStatus('connecting');
+  try{ws=new WebSocket(url)}catch(e){updateStatus('disconnected');scheduleReconnect();return}
+  ws.onopen=()=>{connected=true;updateStatus('connected');if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}if(sendInterval)clearInterval(sendInterval);sendInterval=setInterval(sendReading,500)};
+  ws.onmessage=(evt)=>{try{updatePrediction(JSON.parse(evt.data))}catch(e){}};
+  ws.onclose=(evt)=>{
+    connected=false;
+    if(sendInterval){clearInterval(sendInterval);sendInterval=null}
+    // Check if server rejected or revoked the token
+    if(evt.code===4001||evt.code===4002||evt.code===1000){
+      tokenRevoked=true;
+      updateStatus('disconnected');
+      document.getElementById('statusText').textContent='Link expired — disconnected by dashboard';
+      document.getElementById('statusBar').style.background='rgba(239,68,68,0.15)';
+      // Show a full-screen expired message
+      document.body.innerHTML='<div style="display:flex;justify-content:center;align-items:center;height:100vh;text-align:center"><div><h1 style="color:#EF4444;font-size:24px">🔒 Disconnected</h1><p style="color:#8B8B9E;margin-top:12px">This link has been revoked by the dashboard.<br>Ask for a new link to reconnect.</p></div></div>';
+      return;
+    }
+    updateStatus('disconnected');
+    scheduleReconnect();
+  };
+  ws.onerror=()=>{connected=false;updateStatus('disconnected')};
+}
+function scheduleReconnect(){if(tokenRevoked||reconnectTimer)return;reconnectTimer=setTimeout(()=>{reconnectTimer=null;connectWS()},3000)}
+
+function sendReading(){
+  if(!ws||ws.readyState!==WebSocket.OPEN)return;
+  let payload;
+  if(useSimulation||!sensorWorking){
+    payload=getSimValues();
+  } else {
+    payload={ax:Math.round(lastAx*100)/100,ay:Math.round(lastAy*100)/100,az:Math.round(lastAz*100)/100,magnitude:Math.round(lastMag*100)/100,vibration:Math.round(lastVib*100)/100};
+  }
+  ws.send(JSON.stringify(payload));
+  readingsSent++;
+  updateSensorUI(payload);
+  updateShakeIndicator(payload);
+}
+
+// ── UI Updates ──
+function updateStatus(state){
+  const bar=document.getElementById('statusBar'),dot=document.getElementById('statusDot'),txt=document.getElementById('statusText');
+  bar.className='status-bar '+state;
+  if(state==='connected'){dot.className='dot green';txt.textContent='Connected — Streaming Data'}
+  else if(state==='connecting'){dot.className='dot yellow';txt.textContent='Connecting...'}
+  else{dot.className='dot red';txt.textContent='Disconnected — Reconnecting...'}
+}
+
+function updateShakeIndicator(d){
+  const el=document.getElementById('shakeIndicator');
+  if(d.vibration>3){el.className='shake-indicator shake-hard';el.textContent='💥 Shake: HARD (HIGH-STRESS)'}
+  else if(d.vibration>0.5){el.className='shake-indicator shake-medium';el.textContent='🤝 Shake: MEDIUM (IDLE)'}
+  else{el.className='shake-indicator shake-none';el.textContent='📱 Shake: STILL (NORMAL)'}
+}
+
+function updateSensorUI(d){
+  document.getElementById('ax').textContent=d.ax.toFixed(2);
+  document.getElementById('ay').textContent=d.ay.toFixed(2);
+  document.getElementById('az').textContent=d.az.toFixed(2);
+  document.getElementById('magVal').textContent=d.magnitude.toFixed(2)+' m/s²';
+  document.getElementById('vibVal').textContent=d.vibration.toFixed(2);
+  document.getElementById('readingsCount').textContent=readingsSent;
+  const magPct=Math.min(100,(d.magnitude/20)*100),magBar=document.getElementById('magBar');
+  magBar.style.width=magPct+'%';magBar.style.background=magPct<55?'var(--ok)':magPct<80?'var(--warn)':'var(--danger)';
+  const vibPct=Math.min(100,(d.vibration/10)*100),vibBar=document.getElementById('vibBar');
+  vibBar.style.width=vibPct+'%';vibBar.style.background=vibPct<25?'var(--ok)':vibPct<50?'var(--warn)':'var(--danger)';
+}
+
+function updatePrediction(d){
+  const badge=document.getElementById('clusterBadge'),cname=d.cluster||'UNKNOWN';
+  badge.textContent=cname;
+  badge.className='badge '+(cname==='NORMAL'?'badge-normal':cname==='IDLE'?'badge-idle':'badge-stress');
+  drawGauge(d.health_score||0);
+  document.getElementById('anomScore').textContent=(d.anomaly_score||0).toFixed(4);
+  document.getElementById('anomScore').style.color=d.anomaly_score<-0.55?'var(--danger)':d.anomaly_score<-0.45?'var(--warn)':'var(--ok)';
+  document.getElementById('rulHours').textContent=d.rul_hours||'—';
+  document.getElementById('alertLevel').textContent=d.alert_level||'—';
+  const al=d.alert_level||'';
+  document.getElementById('alertLevel').style.color=al==='CRITICAL'?'var(--danger)':al==='WARNING'?'var(--warn)':'var(--ok)';
+  document.getElementById('recommendation').textContent=d.recommendation||'—';
+}
+
+function drawGauge(score){
+  const svg=document.getElementById('healthGauge'),pct=Math.max(0,Math.min(100,score));
+  const color=pct>70?'var(--ok)':pct>40?'var(--warn)':'var(--danger)';
+  const s=140,r=s*.38,cx=s/2,cy=s*.58,circ=2*Math.PI*r,arc=(270/360)*circ,off=arc-(pct/100)*arc;
+  const angle=-135+(pct/100)*270,nx=cx+Math.cos((angle-90)*Math.PI/180)*r*.62,ny=cy+Math.sin((angle-90)*Math.PI/180)*r*.62;
+  svg.innerHTML=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card2)" stroke-width="${s*.055}" stroke-dasharray="${arc} ${circ}" stroke-linecap="round" transform="rotate(-225 ${cx} ${cy})"/><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${s*.055}" stroke-dasharray="${arc} ${circ}" stroke-dashoffset="${off}" stroke-linecap="round" transform="rotate(-225 ${cx} ${cy})" style="transition:stroke-dashoffset .5s"/><line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="${color}" stroke-width="${s*.016}" stroke-linecap="round" style="transition:all .5s"/><circle cx="${cx}" cy="${cy}" r="${s*.032}" fill="${color}"/><text x="${cx}" y="${cy-r*.05}" text-anchor="middle" fill="${color}" font-size="${s*.19}" font-weight="800" font-family="monospace">${Math.round(pct)}</text><text x="${cx}" y="${cy+r*.3}" text-anchor="middle" fill="var(--text3)" font-size="${s*.08}">HEALTH</text>`;
+}
+
+// ── Init ──
+checkSensors();
+drawGauge(0);
+// Start WS even if sensor not ready (for simulation mode)
+setTimeout(()=>{if(!ws)connectWS()},3000);
+</script>
+</body>
+</html>

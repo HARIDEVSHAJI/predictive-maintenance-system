@@ -1,0 +1,44 @@
+# ── General ──────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+*.log
+Thumbs.db
+
+# ── Environment ──────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Backend (Python) ─────────────────────
+backend/venv/
+backend/env/
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+
+# ⚠️ LARGE DATA FILES ⚠️
+# GitHub blocks files > 100MB. The following are ignored to prevent push errors:
+backend/data/*.csv
+backend/data/*.parquet
+backend/data/processed/
+
+# ✅ ML MODELS — MUST be committed for deployment (small enough: ~5.5MB total)
+# Do NOT ignore backend/models/*.pkl — they are essential for deployment.
+
+# SSL Certificates (local dev only — Render provides HTTPS automatically)
+backend/cert.pem
+backend/key.pem
+
+# ── Frontend (Node.js/Vite) ──────────────
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.eslintcache
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
