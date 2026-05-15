@@ -68,8 +68,10 @@ An **end-to-end unsupervised machine learning system** for industrial predictive
 
 ## 🚀 Quick Start (Local Development)
 
-### 1. Place the Dataset
-Download the MetroPT-3 dataset and place the CSV file at:
+### 1. Download and Place the Dataset
+To run this project locally, you must first download the raw dataset.
+1. Download the **MetroPT-3 Dataset** from the UCI Machine Learning Repository: [https://archive.ics.uci.edu/dataset/791/metropt+3+dataset](https://archive.ics.uci.edu/dataset/791/metropt+3+dataset)
+2. Extract the downloaded file and place the CSV exactly here:
 ```text
 backend/data/MetroPT3(AirCompressor).csv
 ```
